@@ -1,0 +1,390 @@
+
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+
+# --------------------------------------------------
+# 1. 기본 설정
+# --------------------------------------------------
+
+st.set_page_config(
+    page_title="2030세대 지방선거 투표 경향 분석",
+    page_icon="📊",
+    layout="wide"
+)
+
+st.title("2030세대의 6·3 지방선거 투표 경향 분석")
+st.subheader("서울시장 선거를 중심으로")
+st.caption("2026년 제9회 전국동시지방선거 · 서울시장 선거")
+
+st.markdown("""
+이 대시보드는 2026년 6월 3일 실시된 서울시장 선거를 대상으로
+연령대와 성별에 따른 후보 지지 경향을 살펴봅니다.
+
+최종 개표 결과와 방송 3사 출구조사 결과를 구분하여 비교하며,
+특히 20대와 30대의 투표 경향 및 성별 차이에 주목합니다.
+""")
+
+st.divider()
+
+# --------------------------------------------------
+# 2. 데이터
+# --------------------------------------------------
+
+# 서울시장 최종 개표 결과
+final_result = pd.DataFrame({
+    "후보": ["오세훈", "정원오", "권영국", "유지혜", "김정철"],
+    "정당": ["국민의힘", "더불어민주당", "정의당", "여성의당", "개혁신당"],
+    "득표수": [2575819, 2515560, 54315, 43967, 43321],
+    "득표율": [49.22, 48.07, 1.03, 0.84, 0.82]
+})
+
+# 방송 3사 출구조사: 연령대별 주요 후보 지지율
+age_result = pd.DataFrame({
+    "연령대": [
+        "20대 이하", "30대", "40대",
+        "50대", "60대", "70대 이상"
+    ],
+    "오세훈": [56.8, 59.7, 44.9, 37.9, 60.4, 71.1],
+    "정원오": [35.9, 36.7, 53.2, 60.7, 38.8, 28.1]
+})
+
+# 방송 3사 출구조사: 20대 성별 지지율
+gender_result = pd.DataFrame({
+    "성별": ["남성", "여성"],
+    "오세훈": [75.3, 41.4],
+    "정원오": [20.6, 48.5]
+})
+
+# 기타 후보 및 무응답 등의 비중
+gender_result["기타 후보·무응답 등"] = (
+    100 - gender_result["오세훈"] - gender_result["정원오"]
+)
+
+# --------------------------------------------------
+# 3. 사이드바 필터
+# --------------------------------------------------
+
+st.sidebar.header("분석 조건")
+
+selected_ages = st.sidebar.multiselect(
+    "분석할 연령대",
+    options=age_result["연령대"].tolist(),
+    default=["20대 이하", "30대", "40대", "50대"]
+)
+
+selected_candidates = st.sidebar.multiselect(
+    "비교할 후보",
+    options=["오세훈", "정원오"],
+    default=["오세훈", "정원오"]
+)
+
+st.sidebar.markdown("---")
+st.sidebar.caption(
+    "자료: 방송 3사 출구조사 및 중앙선거관리위원회 개표 결과"
+)
+
+# --------------------------------------------------
+# 4. 주요 선거 결과 요약
+# --------------------------------------------------
+
+st.header("1. 서울시장 선거 최종 결과")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "1위 오세훈",
+        "49.22%",
+        "2,575,819표"
+    )
+
+with col2:
+    st.metric(
+        "2위 정원오",
+        "48.07%",
+        "2,515,560표"
+    )
+
+with col3:
+    st.metric(
+        "두 후보 득표율 차이",
+        "1.15%p",
+        "60,259표 차이"
+    )
+
+st.markdown("""
+최종 개표 결과 오세훈 후보가 49.22%를 얻어 당선되었으며,
+정원오 후보는 48.07%를 기록했습니다.
+두 후보의 득표율 차이는 1.15%p로 매우 근소했습니다.
+""")
+
+# 최종 득표율 차트
+fig1 = px.bar(
+    final_result.sort_values("득표율", ascending=True),
+    x="득표율",
+    y="후보",
+    color="정당",
+    orientation="h",
+    text="득표율",
+    hover_data=["득표수", "정당"],
+    title="서울시장 후보별 최종 득표율",
+    labels={
+        "득표율": "득표율(%)",
+        "후보": "후보자"
+    }
+)
+
+fig1.update_traces(
+    texttemplate="%{text:.2f}%",
+    textposition="outside"
+)
+
+fig1.update_layout(
+    xaxis_range=[0, 60],
+    height=420,
+    legend_title="소속 정당"
+)
+
+st.plotly_chart(fig1, use_container_width=True)
+
+st.divider()
+
+# --------------------------------------------------
+# 5. 연령대별 출구조사 분석
+# --------------------------------------------------
+
+st.header("2. 연령대별 후보 지지 경향")
+
+st.markdown("""
+방송 3사 출구조사에서는 연령대에 따라 두 주요 후보의 지지율에
+차이가 나타났습니다. 필터를 이용해 특정 연령대의 결과를 비교할 수 있습니다.
+""")
+
+filtered_age = age_result[
+    age_result["연령대"].isin(selected_ages)
+]
+
+if selected_ages and selected_candidates:
+    age_long = filtered_age.melt(
+        id_vars="연령대",
+        value_vars=selected_candidates,
+        var_name="후보",
+        value_name="지지율"
+    )
+
+    fig2 = px.bar(
+        age_long,
+        x="연령대",
+        y="지지율",
+        color="후보",
+        barmode="group",
+        text="지지율",
+        title="연령대별 주요 후보 지지율",
+        labels={
+            "연령대": "연령대",
+            "지지율": "출구조사 지지율(%)",
+            "후보": "후보자"
+        }
+    )
+
+    fig2.update_traces(
+        texttemplate="%{text:.1f}%",
+        textposition="outside"
+    )
+
+    fig2.update_layout(
+        yaxis_range=[0, 85],
+        height=450
+    )
+
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.dataframe(
+        filtered_age,
+        use_container_width=True,
+        hide_index=True
+    )
+
+else:
+    st.warning("연령대와 후보를 각각 하나 이상 선택해주세요.")
+
+# 연령대별 격차 계산
+age_result["지지율 격차"] = (
+    age_result["오세훈"] - age_result["정원오"]
+)
+
+st.subheader("연령대별 후보 지지율 격차")
+
+fig_gap = px.line(
+    age_result,
+    x="연령대",
+    y="지지율 격차",
+    markers=True,
+    text="지지율 격차",
+    title="연령대별 오세훈 후보와 정원오 후보의 지지율 차이",
+    labels={
+        "연령대": "연령대",
+        "지지율 격차": "오세훈 후보 지지율 - 정원오 후보 지지율(%p)"
+    }
+)
+
+fig_gap.add_hline(
+    y=0,
+    line_dash="dash",
+    line_color="gray"
+)
+
+fig_gap.update_traces(
+    texttemplate="%{text:.1f}%p",
+    textposition="top center"
+)
+
+fig_gap.update_layout(height=400)
+
+st.plotly_chart(fig_gap, use_container_width=True)
+
+st.info(
+    "양수는 오세훈 후보의 지지율이 더 높았음을, "
+    "음수는 정원오 후보의 지지율이 더 높았음을 의미합니다."
+)
+
+st.divider()
+
+# --------------------------------------------------
+# 6. 20대 성별 지지 경향
+# --------------------------------------------------
+
+st.header("3. 20대 성별에 따른 후보 지지 차이")
+
+st.markdown("""
+출구조사에서는 20대 남성과 여성 사이에서도
+두 후보에 대한 지지율 차이가 나타났습니다.
+""")
+
+gender_long = gender_result.melt(
+    id_vars="성별",
+    value_vars=[
+        "오세훈",
+        "정원오",
+        "기타 후보·무응답 등"
+    ],
+    var_name="후보 구분",
+    value_name="지지율"
+)
+
+fig3 = px.bar(
+    gender_long,
+    x="성별",
+    y="지지율",
+    color="후보 구분",
+    barmode="group",
+    text="지지율",
+    title="20대 성별에 따른 후보 지지율",
+    labels={
+        "성별": "성별",
+        "지지율": "출구조사 비율(%)",
+        "후보 구분": "후보"
+    }
+)
+
+fig3.update_traces(
+    texttemplate="%{text:.1f}%",
+    textposition="outside"
+)
+
+fig3.update_layout(
+    yaxis_range=[0, 100],
+    height=450
+)
+
+st.plotly_chart(fig3, use_container_width=True)
+
+st.dataframe(
+    gender_result,
+    use_container_width=True,
+    hide_index=True
+)
+
+st.markdown("""
+**주요 관찰 결과**
+
+- 20대 남성의 오세훈 후보 지지율은 75.3%로 나타났습니다.
+- 20대 여성의 오세훈 후보 지지율은 41.4%였습니다.
+- 정원오 후보의 경우 20대 여성 지지율이 48.5%로 남성의 20.6%보다 높았습니다.
+
+이는 20대 내부에서도 성별에 따라 후보 지지 경향이 다르게 나타났음을 보여줍니다.
+""")
+
+st.divider()
+
+# --------------------------------------------------
+# 7. 데이터 표 및 다운로드
+# --------------------------------------------------
+
+st.header("4. 데이터 확인 및 다운로드")
+
+data_type = st.selectbox(
+    "확인할 데이터 선택",
+    [
+        "최종 개표 결과",
+        "연령대별 출구조사",
+        "20대 성별 출구조사"
+    ]
+)
+
+if data_type == "최종 개표 결과":
+    download_df = final_result
+elif data_type == "연령대별 출구조사":
+    download_df = age_result
+else:
+    download_df = gender_result
+
+st.dataframe(
+    download_df,
+    use_container_width=True,
+    hide_index=True
+)
+
+csv = download_df.to_csv(
+    index=False,
+    encoding="utf-8-sig"
+)
+
+st.download_button(
+    label="선택한 데이터 CSV 다운로드",
+    data=csv,
+    file_name="election_analysis.csv",
+    mime="text/csv"
+)
+
+st.divider()
+
+# --------------------------------------------------
+# 8. 분석의 한계 및 자료 출처
+# --------------------------------------------------
+
+st.header("5. 분석의 한계와 자료 출처")
+
+st.warning("""
+**분석 시 유의사항**
+
+1. 연령대별·성별 수치는 실제 투표 결과가 아닌 방송 3사 출구조사 결과입니다.
+2. 연령대별 자료의 '20대 이하'는 출구조사에서 사용한 연령 구분이며, 20대만을 의미하지 않습니다.
+3. 성별 자료는 20대 남성과 여성의 출구조사 결과로, 전체 2030세대의 성별 투표 성향으로 일반화할 수 없습니다.
+4. '기타 후보·무응답 등'은 두 주요 후보의 비율을 100%에서 차감해 계산한 값이며, 특정 후보의 득표율을 의미하지 않습니다.
+5. 출구조사 결과와 최종 개표 결과는 서로 다른 자료이므로 직접 동일한 기준의 득표율로 간주해서는 안 됩니다.
+""")
+
+st.markdown("""
+**자료 출처**
+
+- [중앙선거관리위원회 자료를 제공받은 서울시장 최종 개표 결과](https://www.ohmynews.com/NWS_Web/Event/Elect/2026/counting.aspx)
+- [서울신문: 서울 4050은 정원오…20대 남성은 75%가 오세훈 (방송 3사 출구조사)](https://www.seoul.co.kr/news/2026/06/03/20260603500182)
+- [연합뉴스: 6·3 지선 서울시장 선거 출구조사와 실제 개표 결과](https://www.yna.co.kr/view/AKR20260604082100004)
+""")
+
+st.caption(
+    "본 대시보드는 공개된 선거 자료를 활용한 교육·분석 목적의 프로젝트입니다."
+)
